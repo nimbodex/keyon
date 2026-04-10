@@ -31,6 +31,7 @@ func (e *Engine) Set(key, val string) error {
 func (e *Engine) Get(key string) (string, error) {
 	val, ok := e.data[key]
 	if !ok {
+		e.logger.Error("get", slog.String("key", key), slog.String("val", val))
 		return "", ErrKeyNotFound
 	}
 	e.logger.Debug("get", slog.String("key", key), slog.String("val", val))
