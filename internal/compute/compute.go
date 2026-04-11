@@ -1,1 +1,55 @@
 package compute
+
+import (
+	"fmt"
+	"log/slog"
+
+	"github.com/nimbodex/keyon/internal/compute/command"
+	"github.com/nimbodex/keyon/internal/compute/parser"
+	"github.com/nimbodex/keyon/internal/storage"
+)
+
+type Compute interface {
+	Handle(input string) (string, error)
+}
+
+type compute struct {
+	storage storage.Storage
+	logger  *slog.Logger
+}
+
+func New(storage storage.Storage, logger *slog.Logger) Compute {
+	return &compute{storage: storage, logger: logger}
+}
+
+func (c *compute) Handle(input string) (string, error) {
+	c.logger.Info("incoming request", slog.String("input", input))
+
+	cmd, err := parser.Parse(input)
+	if err != nil {
+		return "", err
+	}
+
+	switch cmd.Type {
+	case command.CmdSet:
+		k, v := cmd.Args[0], cmd.Args[1]
+		err := c.storage.Set(k, v)
+		if err != nil {
+			return "", err
+		}
+	case command.CmdGet:
+		val, err := c.storage.Get(cmd.Args[0])
+		if err != nil {
+			return "(nil)", err
+		}
+		return val, nil
+	case command.CmdDel:
+		err := c.storage.Del(cmd.Args[0])
+		if err != nil {
+			return "(nil)", err
+		}
+		return "OK", nil
+	}
+
+	return "", fmt.Errorf("invalid request: %s", input)
+}
