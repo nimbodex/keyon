@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	ErrEmptyInput     = errors.New("empty input")
-	ErrUnknownCommand = errors.New("unknown command")
-	ErrWrongNumArgs   = errors.New("wrong number of arguments")
+	ErrEmptyInput      = errors.New("empty input")
+	ErrUnknownCommand  = errors.New("unknown command")
+	ErrWrongNumArgs    = errors.New("wrong number of arguments")
+	ErrInvalidArgument = errors.New("invalid argument")
 )
 
 var validArgRegex = regexp.MustCompile(`^\w+$`)
@@ -27,7 +28,7 @@ func Parse(input string) (command.Command, error) {
 
 	for _, arg := range args {
 		if !validArgRegex.MatchString(arg) {
-			return command.Command{}, fmt.Errorf("invalid argument: %s", arg)
+			return command.Command{}, fmt.Errorf("%w: %s", ErrInvalidArgument, arg)
 		}
 	}
 
