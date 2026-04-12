@@ -37,6 +37,7 @@ func (c *compute) Handle(input string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		return "OK", nil
 	case command.CmdGet:
 		val, err := c.storage.Get(cmd.Args[0])
 		if err != nil {
@@ -49,7 +50,7 @@ func (c *compute) Handle(input string) (string, error) {
 			return "(nil)", err
 		}
 		return "OK", nil
+	default:
+		return "", fmt.Errorf("invalid request: %s", input)
 	}
-
-	return "", fmt.Errorf("invalid request: %s", input)
 }

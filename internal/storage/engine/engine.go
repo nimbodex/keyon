@@ -40,6 +40,11 @@ func (e *Engine) Get(key string) (string, error) {
 }
 
 func (e *Engine) Del(key string) error {
+	_, ok := e.data[key]
+	if !ok {
+		e.logger.Error("del", slog.String("key", key))
+		return ErrKeyNotFound
+	}
 	delete(e.data, key)
 	e.logger.Debug("del", slog.String("key", key))
 
