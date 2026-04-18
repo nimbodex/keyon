@@ -54,12 +54,30 @@ func TestEngine(t *testing.T) {
 
 	t.Run("set overwrite", func(t *testing.T) {
 		engine := NewEngine(l)
-		err := engine.Set("key", "value")
+		err := engine.Set("key", "value1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+
+		err = engine.Set("key", "value2")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		val, err := engine.Get("key")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if val != "value2" {
+			t.Errorf("expected %q, got %q", "value2", val)
 		}
 	})
 
 	t.Run("del missing key", func(t *testing.T) {
+		engine := NewEngine(l)
+		err := engine.Del("missing")
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
 	})
 }

@@ -26,38 +26,35 @@ func Parse(input string) (command.Command, error) {
 
 	args := tokens[1:]
 
+	var expectedArgs int
+	var cmdType command.Type
+
+	switch tokens[0] {
+	case "SET":
+		cmdType = command.CmdSet
+		expectedArgs = 2
+	case "GET":
+		cmdType = command.CmdGet
+		expectedArgs = 1
+	case "DEL":
+		cmdType = command.CmdDel
+		expectedArgs = 1
+	default:
+		return command.Command{}, ErrUnknownCommand
+	}
+
+	if len(args) != expectedArgs {
+		return command.Command{}, ErrWrongNumArgs
+	}
+
 	for _, arg := range args {
 		if !validArgRegex.MatchString(arg) {
 			return command.Command{}, fmt.Errorf("%w: %s", ErrInvalidArgument, arg)
 		}
 	}
 
-	switch tokens[0] {
-	case "SET":
-		if len(args) != 2 {
-			return command.Command{}, ErrWrongNumArgs
-		}
-		return command.Command{
-			Type: command.CmdSet,
-			Args: args,
-		}, nil
-	case "GET":
-		if len(args) != 1 {
-			return command.Command{}, ErrWrongNumArgs
-		}
-		return command.Command{
-			Type: command.CmdGet,
-			Args: args,
-		}, nil
-	case "DEL":
-		if len(args) != 1 {
-			return command.Command{}, ErrWrongNumArgs
-		}
-		return command.Command{
-			Type: command.CmdDel,
-			Args: args,
-		}, nil
-	default:
-		return command.Command{}, ErrUnknownCommand
-	}
+	return command.Command{
+		Type: cmdType,
+		Args: args,
+	}, nil
 }

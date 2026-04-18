@@ -27,6 +27,7 @@ func (c *compute) Handle(input string) (string, error) {
 
 	cmd, err := parser.Parse(input)
 	if err != nil {
+		c.logger.Error("parse error", slog.String("input", input), slog.String("error", err.Error()))
 		return "", err
 	}
 
@@ -47,7 +48,7 @@ func (c *compute) Handle(input string) (string, error) {
 	case command.CmdDel:
 		err := c.storage.Del(cmd.Args[0])
 		if err != nil {
-			return "(nil)", err
+			return "", err
 		}
 		return "OK", nil
 	default:
