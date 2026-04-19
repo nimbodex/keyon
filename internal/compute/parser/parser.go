@@ -3,8 +3,8 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/nimbodex/keyon/internal/compute/command"
 )
@@ -16,7 +16,23 @@ var (
 	ErrInvalidArgument = errors.New("invalid argument")
 )
 
-var validArgRegex = regexp.MustCompile(`^\w+$`)
+const (
+	setArgsCount = 2
+	getArgsCount = 1
+	delArgsCount = 1
+)
+
+func isValidArg(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+			return false
+		}
+	}
+	return true
+}
 
 func Parse(input string) (command.Command, error) {
 	tokens := strings.Fields(input)
@@ -32,13 +48,13 @@ func Parse(input string) (command.Command, error) {
 	switch tokens[0] {
 	case "SET":
 		cmdType = command.CmdSet
-		expectedArgs = 2
+		expectedArgs = setArgsCount
 	case "GET":
 		cmdType = command.CmdGet
-		expectedArgs = 1
+		expectedArgs = getArgsCount
 	case "DEL":
 		cmdType = command.CmdDel
-		expectedArgs = 1
+		expectedArgs = delArgsCount
 	default:
 		return command.Command{}, ErrUnknownCommand
 	}
@@ -48,7 +64,7 @@ func Parse(input string) (command.Command, error) {
 	}
 
 	for _, arg := range args {
-		if !validArgRegex.MatchString(arg) {
+		if !isValidArg(arg) {
 			return command.Command{}, fmt.Errorf("%w: %s", ErrInvalidArgument, arg)
 		}
 	}

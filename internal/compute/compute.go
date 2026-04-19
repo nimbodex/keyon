@@ -6,19 +6,24 @@ import (
 
 	"github.com/nimbodex/keyon/internal/compute/command"
 	"github.com/nimbodex/keyon/internal/compute/parser"
-	"github.com/nimbodex/keyon/internal/storage"
 )
+
+type Storage interface {
+	Set(key, value string) error
+	Get(key string) (string, error)
+	Del(key string) error
+}
 
 type Compute interface {
 	Handle(input string) (string, error)
 }
 
 type compute struct {
-	storage storage.Storage
+	storage Storage
 	logger  *slog.Logger
 }
 
-func New(storage storage.Storage, logger *slog.Logger) Compute {
+func New(storage Storage, logger *slog.Logger) Compute {
 	return &compute{storage: storage, logger: logger}
 }
 
