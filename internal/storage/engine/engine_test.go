@@ -2,6 +2,8 @@ package engine
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/nimbodex/keyon/pkg/logger"
@@ -80,4 +82,56 @@ func TestEngine(t *testing.T) {
 			t.Fatalf("expected nil error, got %v", err)
 		}
 	})
+}
+
+func TestEngineParallelAccess(t *testing.T) {
+	var wg sync.WaitGroup
+
+	l := logger.NewLogger(false)
+	engine := NewEngine(l)
+
+	wg.Add(100)
+
+	for i := range 100 {
+		go func(id int) {
+			defer wg.Done()
+
+			key := fmt.Sprintf("k-%d", id)
+			err := engine.Set(key, fmt.Sprintf("v-%d", id))
+			if err != nil {
+				t.Errorf("k-%d: unexpected error: %v", id, err)
+			}
+
+			val, err := engine.Get(key)
+			if err != nil {
+				t.Errorf("k-%d: unexpected error: %v", id, err)
+			}
+			if want := fmt.Sprintf("v-%d", id); val != want {
+				t.Errorf("k-%d: want %q, got %q", id, want, val)
+			}
+
+			if id%2 == 0 {
+				if err := engine.Del(key); err != nil {
+					t.Errorf("k-%d: del: %v", id, err)
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := range 100 {
+		key := fmt.Sprintf("k-%d", i)
+		_, err := engine.Get(key)
+
+		if i%2 == 0 {
+			if !errors.Is(err, ErrKeyNotFound) {
+				t.Errorf("k-%d: expected ErrKeyNotFound, got %v", i, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("k-%d: expected nil error, got %v", i, err)
+			}
+		}
+	}
 }
