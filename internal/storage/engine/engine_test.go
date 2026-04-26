@@ -10,7 +10,7 @@ import (
 )
 
 func TestEngine(t *testing.T) {
-	l := logger.NewLogger(false)
+	l := logger.Nop()
 
 	t.Run("set and get", func(t *testing.T) {
 		engine := NewEngine(l)
@@ -87,7 +87,7 @@ func TestEngine(t *testing.T) {
 func TestEngineParallelAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
-	l := logger.NewLogger(false)
+	l := logger.Nop()
 	engine := NewEngine(l)
 
 	wg.Add(100)

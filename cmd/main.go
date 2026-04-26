@@ -12,19 +12,29 @@ import (
 )
 
 func main() {
-	logger := logger.NewLogger(true)
-	engine := engine.NewEngine(logger)
-	db := compute.New(engine, logger)
+	log, closer, err := logger.NewLogger("debug", "stdout")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to init logger:", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := closer.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, "failed to close logger:", err)
+		}
+	}()
+
+	engine := engine.NewEngine(log)
+	db := compute.New(engine, log)
 	scanner := bufio.NewScanner(os.Stdin)
 
-	logger.Info("database started")
+	log.Info("database started")
 
 	for {
 		fmt.Print("> ")
 
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
-				logger.Error("failed to read input", slog.String("error", err.Error()))
+				log.Error("failed to read input", slog.String("error", err.Error()))
 			}
 			break
 		}
