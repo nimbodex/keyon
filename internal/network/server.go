@@ -10,7 +10,12 @@ import (
 	"time"
 )
 
-const initialScannerBuf = 4096
+const (
+	initialScannerBuf     = 4096
+	defaultMaxConnections = 100
+	defaultMaxMessageSize = 4 * 1024
+	defaultIdleTimeout    = 5 * time.Minute
+)
 
 type Config struct {
 	Address        string
@@ -23,23 +28,26 @@ type Handler func(req string) string
 
 type Server struct {
 	address        string
-	maxConnections int
 	maxMessageSize int
 	idleTimeout    time.Duration
 	handler        Handler
 	logger         *slog.Logger
 	connSem        chan struct{}
 	wg             sync.WaitGroup
-
-	mu       sync.Mutex
-	listener net.Listener
-	closed   bool
 }
 
 func NewServer(cfg Config, handler Handler, logger *slog.Logger) *Server {
+	if cfg.MaxConnections <= 0 {
+		cfg.MaxConnections = defaultMaxConnections
+	}
+	if cfg.MaxMessageSize <= 0 {
+		cfg.MaxMessageSize = defaultMaxMessageSize
+	}
+	if cfg.IdleTimeout <= 0 {
+		cfg.IdleTimeout = defaultIdleTimeout
+	}
 	return &Server{
 		address:        cfg.Address,
-		maxConnections: cfg.MaxConnections,
 		maxMessageSize: cfg.MaxMessageSize,
 		idleTimeout:    cfg.IdleTimeout,
 		handler:        handler,
@@ -53,37 +61,25 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.mu.Lock()
-	s.listener = listener
-	s.mu.Unlock()
-
-	done := make(chan struct{})
-	defer close(done)
+	defer listener.Close()
 
 	go func() {
-		select {
-		case <-ctx.Done():
-		case <-done:
-		}
-		s.closeListener()
+		<-ctx.Done()
+		_ = listener.Close()
 	}()
 
 	defer s.wg.Wait()
-	defer s.closeListener()
 
 	for {
-		conn, acceptErr := listener.Accept()
-		if acceptErr != nil {
-			if errors.Is(acceptErr, net.ErrClosed) {
+		conn, err := listener.Accept()
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
-			return acceptErr
+			return err
 		}
 
 		select {
-		case <-ctx.Done():
-			_ = conn.Close()
-			return nil
 		case s.connSem <- struct{}{}:
 			s.wg.Go(func() {
 				defer func() { <-s.connSem }()
@@ -97,18 +93,6 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-func (s *Server) closeListener() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || s.listener == nil {
-		return
-	}
-	s.closed = true
-	if err := s.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-		s.logger.Error("Server close", slog.Any("error", err))
-	}
-}
-
 func recoverPanic(logger *slog.Logger, addr net.Addr) {
 	if r := recover(); r != nil {
 		logger.Error("panic in connection handler",
@@ -116,11 +100,6 @@ func recoverPanic(logger *slog.Logger, addr net.Addr) {
 			slog.String("addr", addr.String()),
 		)
 	}
-}
-
-func (s *Server) Stop() {
-	s.closeListener()
-	s.wg.Wait()
 }
 
 func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
@@ -145,16 +124,7 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		}
 
 		if !scanner.Scan() {
-			err := scanner.Err()
-			switch {
-			case err == nil:
-			case errors.Is(err, net.ErrClosed):
-			case isTimeout(err):
-			case errors.Is(err, bufio.ErrTooLong):
-				_, _ = conn.Write([]byte("ERROR: Message too large\n"))
-			default:
-				s.logger.Error("Server scan", slog.Any("error", err))
-			}
+			s.handleScanErr(scanner.Err(), conn)
 			return
 		}
 
@@ -162,6 +132,15 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		if _, err := conn.Write([]byte(res + "\n")); err != nil {
 			return
 		}
+	}
+}
+
+func (s *Server) handleScanErr(err error, conn net.Conn) {
+	switch {
+	case errors.Is(err, bufio.ErrTooLong):
+		_, _ = conn.Write([]byte("ERROR: Message too large\n"))
+	case err != nil && !errors.Is(err, net.ErrClosed) && !isTimeout(err):
+		s.logger.Error("Server scan", slog.Any("error", err))
 	}
 }
 
