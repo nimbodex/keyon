@@ -11,6 +11,7 @@ import (
 	"github.com/nimbodex/keyon/internal/config"
 	"github.com/nimbodex/keyon/internal/network"
 	"github.com/nimbodex/keyon/internal/storage/engine"
+	"github.com/nimbodex/keyon/internal/wal"
 	"github.com/nimbodex/keyon/pkg/logger"
 )
 
@@ -36,7 +37,36 @@ func Run(ctx context.Context, configPath string) error {
 	}
 
 	eng := engine.NewEngine(log)
-	comp := compute.New(eng, log)
+
+	var walInstance compute.WAL
+	if cfg.WAL != nil {
+		maxSeg, err := config.ParseSize(cfg.WAL.MaxSegmentSize)
+		if err != nil {
+			return fmt.Errorf("parse max_segment_size: %w", err)
+		}
+
+		if err := wal.Recover(cfg.WAL.DataDirectory, eng, log); err != nil {
+			return fmt.Errorf("wal recover: %w", err)
+		}
+
+		w, err := wal.New(wal.Config{
+			DataDir:        cfg.WAL.DataDirectory,
+			BatchSize:      cfg.WAL.FlushingBatchSize,
+			BatchTimeout:   cfg.WAL.FlushingBatchTimeout,
+			MaxSegmentSize: int64(maxSeg),
+		}, log)
+		if err != nil {
+			return fmt.Errorf("wal init: %w", err)
+		}
+		defer func() {
+			if cerr := w.Close(); cerr != nil {
+				log.Error("wal close", slog.Any("error", cerr))
+			}
+		}()
+		walInstance = w
+	}
+
+	comp := compute.New(eng, walInstance, log)
 
 	handler := func(req string) string {
 		res, err := comp.Handle(req)

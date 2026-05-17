@@ -19,6 +19,7 @@ type Config struct {
 	Engine  EngineConfig  `yaml:"engine"`
 	Network NetworkConfig `yaml:"network"`
 	Logging LoggingConfig `yaml:"logging"`
+	WAL     *WALConfig    `yaml:"wal"`
 }
 
 type EngineConfig struct {
@@ -37,6 +38,13 @@ type LoggingConfig struct {
 	Output string `yaml:"output"`
 }
 
+type WALConfig struct {
+	FlushingBatchSize    int           `yaml:"flushing_batch_size"`
+	FlushingBatchTimeout time.Duration `yaml:"flushing_batch_timeout"`
+	MaxSegmentSize       string        `yaml:"max_segment_size"`
+	DataDirectory        string        `yaml:"data_directory"`
+}
+
 func Default() Config {
 	return Config{
 		Engine: EngineConfig{
@@ -52,6 +60,15 @@ func Default() Config {
 			Level:  "info",
 			Output: "stdout",
 		},
+	}
+}
+
+func DefaultWAL() WALConfig {
+	return WALConfig{
+		FlushingBatchSize:    100,
+		FlushingBatchTimeout: 10 * time.Millisecond,
+		MaxSegmentSize:       "10MB",
+		DataDirectory:        "./data/wal",
 	}
 }
 
@@ -131,5 +148,21 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Logging.Output == "" {
 		cfg.Logging.Output = def.Logging.Output
+	}
+
+	if cfg.WAL != nil {
+		walDef := DefaultWAL()
+		if cfg.WAL.FlushingBatchSize == 0 {
+			cfg.WAL.FlushingBatchSize = walDef.FlushingBatchSize
+		}
+		if cfg.WAL.FlushingBatchTimeout == 0 {
+			cfg.WAL.FlushingBatchTimeout = walDef.FlushingBatchTimeout
+		}
+		if cfg.WAL.MaxSegmentSize == "" {
+			cfg.WAL.MaxSegmentSize = walDef.MaxSegmentSize
+		}
+		if cfg.WAL.DataDirectory == "" {
+			cfg.WAL.DataDirectory = walDef.DataDirectory
+		}
 	}
 }
