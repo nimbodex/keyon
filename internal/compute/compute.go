@@ -14,17 +14,22 @@ type Storage interface {
 	Del(key string) error
 }
 
+type WAL interface {
+	WriteCmd(typ command.Type, args []string) error
+}
+
 type Compute interface {
 	Handle(input string) (string, error)
 }
 
 type compute struct {
 	storage Storage
+	wal     WAL
 	logger  *slog.Logger
 }
 
-func New(storage Storage, logger *slog.Logger) Compute {
-	return &compute{storage: storage, logger: logger}
+func New(storage Storage, wal WAL, logger *slog.Logger) Compute {
+	return &compute{storage: storage, wal: wal, logger: logger}
 }
 
 func (c *compute) Handle(input string) (string, error) {
@@ -38,9 +43,13 @@ func (c *compute) Handle(input string) (string, error) {
 
 	switch cmd.Type {
 	case command.CmdSet:
+		if c.wal != nil {
+			if err := c.wal.WriteCmd(command.CmdSet, cmd.Args); err != nil {
+				return "", err
+			}
+		}
 		k, v := cmd.Args[0], cmd.Args[1]
-		err := c.storage.Set(k, v)
-		if err != nil {
+		if err := c.storage.Set(k, v); err != nil {
 			return "", err
 		}
 		return "OK", nil
@@ -51,8 +60,12 @@ func (c *compute) Handle(input string) (string, error) {
 		}
 		return val, nil
 	case command.CmdDel:
-		err := c.storage.Del(cmd.Args[0])
-		if err != nil {
+		if c.wal != nil {
+			if err := c.wal.WriteCmd(command.CmdDel, cmd.Args); err != nil {
+				return "", err
+			}
+		}
+		if err := c.storage.Del(cmd.Args[0]); err != nil {
 			return "", err
 		}
 		return "OK", nil
