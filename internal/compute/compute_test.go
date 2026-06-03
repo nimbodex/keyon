@@ -134,6 +134,33 @@ func TestHandleGetSkipsWAL(t *testing.T) {
 	}
 }
 
+func TestReadOnlyRejectsWrites(t *testing.T) {
+	storage := newFakeStorage()
+	_ = storage.Set("k", "v")
+	c := NewReadOnly(storage, newLogger())
+
+	if _, err := c.Handle("SET k2 v2"); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("expected ErrReadOnly on SET, got %v", err)
+	}
+	if _, err := c.Handle("DEL k"); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("expected ErrReadOnly on DEL, got %v", err)
+	}
+	if _, ok := storage.data["k2"]; ok {
+		t.Fatal("storage must not be modified on read-only SET")
+	}
+	if _, ok := storage.data["k"]; !ok {
+		t.Fatal("storage must not be modified on read-only DEL")
+	}
+
+	res, err := c.Handle("GET k")
+	if err != nil {
+		t.Fatalf("read-only GET should work: %v", err)
+	}
+	if res != "v" {
+		t.Fatalf("expected v, got %q", res)
+	}
+}
+
 func TestHandleWALErrorSkipsStorage(t *testing.T) {
 	storage := newFakeStorage()
 	wal := &fakeWAL{err: errors.New("disk on fire")}

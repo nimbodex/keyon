@@ -178,6 +178,41 @@ func TestWALSegmentRotation(t *testing.T) {
 	}
 }
 
+func TestWALCurrentSegment(t *testing.T) {
+	dir := t.TempDir()
+	w, err := New(Config{
+		DataDir:        dir,
+		BatchSize:      1,
+		BatchTimeout:   5 * time.Millisecond,
+		MaxSegmentSize: 20,
+	}, testLogger())
+	if err != nil {
+		t.Fatalf("new wal: %v", err)
+	}
+	defer w.Close()
+
+	first := w.CurrentSegment()
+	if first == "" || !IsSegmentName(first) {
+		t.Fatalf("expected a valid current segment, got %q", first)
+	}
+
+	for i := range 5 {
+		time.Sleep(1 * time.Millisecond)
+		if err := w.Write(Entry{Type: command.CmdSet, Args: []string{"k", "v"}}); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+
+	last := w.CurrentSegment()
+	if last == first {
+		t.Fatal("expected current segment to advance after rotation")
+	}
+	segs := readAllSegments(t, dir)
+	if last != segs[len(segs)-1] {
+		t.Fatalf("expected current segment %q to be the newest %q", last, segs[len(segs)-1])
+	}
+}
+
 func TestWALCloseDrains(t *testing.T) {
 	dir := t.TempDir()
 	w, err := New(Config{

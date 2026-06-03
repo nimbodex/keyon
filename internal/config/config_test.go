@@ -118,6 +118,81 @@ wal:
 	}
 }
 
+func TestLoadNoReplicationSection(t *testing.T) {
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Replication != nil {
+		t.Fatalf("expected replication disabled by default, got %+v", cfg.Replication)
+	}
+}
+
+func TestLoadEmptyReplicationSectionGetsDefaults(t *testing.T) {
+	path := writeTempConfig(t, `
+replication: {}
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Replication == nil {
+		t.Fatal("expected replication not nil")
+	}
+	def := DefaultReplication()
+	if *cfg.Replication != def {
+		t.Fatalf("expected %+v, got %+v", def, *cfg.Replication)
+	}
+}
+
+func TestLoadFullReplicationSection(t *testing.T) {
+	path := writeTempConfig(t, `
+replication:
+  replica_type: "master"
+  master_address: "10.0.0.1:9999"
+  sync_interval: "5s"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Replication == nil {
+		t.Fatal("expected replication not nil")
+	}
+	expected := ReplicationConfig{
+		ReplicaType:   "master",
+		MasterAddress: "10.0.0.1:9999",
+		SyncInterval:  5 * time.Second,
+	}
+	if *cfg.Replication != expected {
+		t.Fatalf("expected %+v, got %+v", expected, *cfg.Replication)
+	}
+}
+
+func TestLoadPartialReplicationSection(t *testing.T) {
+	path := writeTempConfig(t, `
+replication:
+  replica_type: "master"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Replication == nil {
+		t.Fatal("expected replication not nil")
+	}
+	def := DefaultReplication()
+	if cfg.Replication.ReplicaType != "master" {
+		t.Fatalf("ReplicaType: expected master, got %q", cfg.Replication.ReplicaType)
+	}
+	if cfg.Replication.MasterAddress != def.MasterAddress {
+		t.Fatalf("MasterAddress: expected %q, got %q", def.MasterAddress, cfg.Replication.MasterAddress)
+	}
+	if cfg.Replication.SyncInterval != def.SyncInterval {
+		t.Fatalf("SyncInterval: expected %v, got %v", def.SyncInterval, cfg.Replication.SyncInterval)
+	}
+}
+
 func TestLoadBrokenYAML(t *testing.T) {
 	path := writeTempConfig(t, "engine: [unterminated")
 	_, err := Load(path)

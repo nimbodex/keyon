@@ -3,7 +3,9 @@ package wal
 import (
 	"errors"
 	"log/slog"
+	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nimbodex/keyon/internal/compute/command"
@@ -30,6 +32,8 @@ type WAL struct {
 	stop     chan struct{}
 	doneLoop chan struct{}
 	logger   *slog.Logger
+
+	current atomic.Value
 
 	mu     sync.Mutex
 	closed bool
@@ -58,8 +62,17 @@ func New(cfg Config, logger *slog.Logger) (*WAL, error) {
 		doneLoop: make(chan struct{}),
 		logger:   logger,
 	}
+	w.current.Store(filepath.Base(seg.Path()))
 	go w.loop()
 	return w, nil
+}
+
+func (w *WAL) CurrentSegment() string {
+	v := w.current.Load()
+	if v == nil {
+		return ""
+	}
+	return v.(string)
 }
 
 func (w *WAL) WriteCmd(typ command.Type, args []string) error {
@@ -193,6 +206,7 @@ func (w *WAL) flush(batch []request) {
 			return
 		}
 		w.seg = seg
+		w.current.Store(filepath.Base(seg.Path()))
 	}
 
 	buf := make([]byte, 0, total)

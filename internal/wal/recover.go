@@ -54,6 +54,14 @@ func Recover(dir string, applier Applier, logger *slog.Logger) error {
 	return nil
 }
 
+func ReplayFile(path string, applier Applier, logger *slog.Logger) (int, error) {
+	return replayFile(path, applier, logger)
+}
+
+func IsSegmentName(name string) bool {
+	return strings.HasPrefix(name, segmentPrefix) && strings.HasSuffix(name, segmentSuffix)
+}
+
 func replayFile(path string, applier Applier, logger *slog.Logger) (int, error) {
 	f, err := os.Open(path)
 	if err != nil {
