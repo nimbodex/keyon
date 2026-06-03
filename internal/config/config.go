@@ -15,10 +15,17 @@ var errInvalidSizeFormat = errors.New("invalid size format, expected <number>[B|
 
 var sizeFormatRegex = regexp.MustCompile(`(?i)^(\d+)\s*(B|KB|MB|GB)?$`)
 
+const (
+	ReplicaTypeMaster = "master"
+	ReplicaTypeSlave  = "slave"
+)
+
 type Config struct {
-	Engine  EngineConfig  `yaml:"engine"`
-	Network NetworkConfig `yaml:"network"`
-	Logging LoggingConfig `yaml:"logging"`
+	Engine      EngineConfig       `yaml:"engine"`
+	Network     NetworkConfig      `yaml:"network"`
+	Logging     LoggingConfig      `yaml:"logging"`
+	WAL         *WALConfig         `yaml:"wal"`
+	Replication *ReplicationConfig `yaml:"replication"`
 }
 
 type EngineConfig struct {
@@ -37,6 +44,19 @@ type LoggingConfig struct {
 	Output string `yaml:"output"`
 }
 
+type WALConfig struct {
+	FlushingBatchSize    int           `yaml:"flushing_batch_size"`
+	FlushingBatchTimeout time.Duration `yaml:"flushing_batch_timeout"`
+	MaxSegmentSize       string        `yaml:"max_segment_size"`
+	DataDirectory        string        `yaml:"data_directory"`
+}
+
+type ReplicationConfig struct {
+	ReplicaType   string        `yaml:"replica_type"`
+	MasterAddress string        `yaml:"master_address"`
+	SyncInterval  time.Duration `yaml:"sync_interval"`
+}
+
 func Default() Config {
 	return Config{
 		Engine: EngineConfig{
@@ -52,6 +72,23 @@ func Default() Config {
 			Level:  "info",
 			Output: "stdout",
 		},
+	}
+}
+
+func DefaultReplication() ReplicationConfig {
+	return ReplicationConfig{
+		ReplicaType:   ReplicaTypeSlave,
+		MasterAddress: "127.0.0.1:3232",
+		SyncInterval:  time.Second,
+	}
+}
+
+func DefaultWAL() WALConfig {
+	return WALConfig{
+		FlushingBatchSize:    100,
+		FlushingBatchTimeout: 10 * time.Millisecond,
+		MaxSegmentSize:       "10MB",
+		DataDirectory:        "./data/wal",
 	}
 }
 
@@ -131,5 +168,34 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Logging.Output == "" {
 		cfg.Logging.Output = def.Logging.Output
+	}
+
+	if cfg.WAL != nil {
+		walDef := DefaultWAL()
+		if cfg.WAL.FlushingBatchSize == 0 {
+			cfg.WAL.FlushingBatchSize = walDef.FlushingBatchSize
+		}
+		if cfg.WAL.FlushingBatchTimeout == 0 {
+			cfg.WAL.FlushingBatchTimeout = walDef.FlushingBatchTimeout
+		}
+		if cfg.WAL.MaxSegmentSize == "" {
+			cfg.WAL.MaxSegmentSize = walDef.MaxSegmentSize
+		}
+		if cfg.WAL.DataDirectory == "" {
+			cfg.WAL.DataDirectory = walDef.DataDirectory
+		}
+	}
+
+	if cfg.Replication != nil {
+		replDef := DefaultReplication()
+		if cfg.Replication.ReplicaType == "" {
+			cfg.Replication.ReplicaType = replDef.ReplicaType
+		}
+		if cfg.Replication.MasterAddress == "" {
+			cfg.Replication.MasterAddress = replDef.MasterAddress
+		}
+		if cfg.Replication.SyncInterval == 0 {
+			cfg.Replication.SyncInterval = replDef.SyncInterval
+		}
 	}
 }
